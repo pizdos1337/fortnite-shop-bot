@@ -1,0 +1,16 @@
+# systemd: скопировать в /etc/systemd/system/, поправить пути и пользователя, затем
+#   sudo systemctl daemon-reload && sudo systemctl enable --now fortnite-shop-bot
+[Unit]
+Description=Fortnite shop wishlist Telegram bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=bot
+WorkingDirectory=/home/bot/fortnite-shop-bot
+ExecStart=/home/bot/fortnite-shop-bot/venv/bin/python bot.py
+Restart=always
+RestartSec=15
+
+[Install]
+WantedBy=multi-user.target

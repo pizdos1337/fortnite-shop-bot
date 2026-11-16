@@ -114,7 +114,7 @@ def list_view(chat_id):
         it = by_id.get(wid)
         name = it["name"] if it else wid
         if it:
-            now = f" 🛒 сейчас в магазине, {prices[wid]} В-баксов" if wid in prices else ""
+            now = f" 🛒 сейчас в магазине: {escape(C.offer_text(prices[wid]))}" if wid in prices else ""
             lines.append(f"{i}. {escape(C.describe(it))}{now}")
         else:
             lines.append(f"{i}. {escape(wid)} (нет в каталоге)")
@@ -193,7 +193,7 @@ async def on_toggle(c: CallbackQuery):
         u["wish"].append(wid)
         note = f"Добавил: {name}"
         if wid in prices:
-            note += f". Он прямо сейчас в магазине за {prices[wid]} В-баксов!"
+            note += f". Он прямо сейчас в магазине: {C.offer_text(prices[wid])}!"
     save_users()
     q = last_query.get(c.message.chat.id)
     if q:
@@ -209,7 +209,7 @@ async def on_toggle(c: CallbackQuery):
             await c.message.edit_text(text, reply_markup=kb)
         except Exception:
             pass
-    await c.answer(note, show_alert=wid in prices and wid in u["wish"])
+    await c.answer(note[:200], show_alert=wid in prices and wid in u["wish"])
 
 
 @dp.callback_query(F.data.startswith("r:"))
@@ -230,13 +230,13 @@ async def send_hits(bot: Bot, chat_id, hits):
     for wid in hits:
         it = by_id.get(wid)
         lines.append(f"• {escape(it['name'] if it else wid)}"
-                     f"{' · ' + escape(it['type_name']) if it else ''} — {prices[wid]} В-баксов")
+                     f"{' · ' + escape(it['type_name']) if it else ''} — {escape(C.offer_text(prices[wid]))}")
     await bot.send_message(chat_id, "\n".join(lines))
     for wid in hits[:10]:
         it = by_id.get(wid)
         if it and it["icon"]:
             try:
-                await bot.send_photo(chat_id, it["icon"], caption=f"{it['name']} — {prices[wid]} В-баксов")
+                await bot.send_photo(chat_id, it["icon"], caption=f"{it['name']} — {escape(C.offer_text(prices[wid]))}")
             except Exception as e:
                 logging.warning("фото %s: %s", wid, e)
 

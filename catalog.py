@@ -97,15 +97,33 @@ async def load_shop() -> dict:
 
 
 def shop_prices(shop: dict) -> dict:
-    """id предмета -> самая низкая цена в В-баксах среди предложений магазина
-    (предмет может продаваться и отдельно, и в наборе)."""
-    prices = {}
+    """id предмета -> {"single": цена отдельно или None, "bundle": (название набора, цена) или None}.
+    Предмет может продаваться отдельно, в наборе или и так и так; берём самые дешёвые варианты."""
+    offers = {}
     for e in shop.get("entries") or []:
+        p = e.get("finalPrice", 0)
+        bundle = (e.get("bundle") or {}).get("name")
         for it in e.get("brItems") or []:
-            p = e.get("finalPrice", 0)
-            if it["id"] not in prices or p < prices[it["id"]]:
-                prices[it["id"]] = p
-    return prices
+            o = offers.setdefault(it["id"], {"single": None, "bundle": None})
+            if bundle:
+                if o["bundle"] is None or p < o["bundle"][1]:
+                    o["bundle"] = (bundle, p)
+            elif o["single"] is None or p < o["single"]:
+                o["single"] = p
+    return offers
+
+
+def offer_text(o: dict) -> str:
+    if o["bundle"]:
+        name, price = o["bundle"]
+        if "«" not in name:            # «Комплект «Хацунэ Мику»» — двойные кавычки ни к чему
+            name = f"«{name}»"
+    if o["single"] is not None:
+        s = f"{o['single']} В-баксов"
+        if o["bundle"]:
+            s += f" (также в наборе {name} за {price})"
+        return s
+    return f"только в наборе {name} за {price} В-баксов"
 
 
 def _norm(s: str) -> str:

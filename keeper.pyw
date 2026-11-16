@@ -17,6 +17,41 @@ except OSError:
     sys.exit(0)
 
 python = Path(sys.executable).with_name("python.exe")
+
+
+def kill_with_me():
+    """Job object с KILL_ON_JOB_CLOSE: если keeper остановят (schtasks /End),
+    бот закроется вместе с ним, а не останется висеть со старым кодом."""
+    import ctypes
+    from ctypes import wintypes as w
+
+    class LIMIT(ctypes.Structure):
+        _fields_ = [("a", ctypes.c_int64), ("b", ctypes.c_int64), ("flags", w.DWORD),
+                    ("c", ctypes.c_size_t), ("d", ctypes.c_size_t), ("e", w.DWORD),
+                    ("f", ctypes.c_size_t), ("g", w.DWORD), ("h", w.DWORD)]
+
+    class EXT(ctypes.Structure):
+        _fields_ = [("basic", LIMIT), ("io", ctypes.c_uint64 * 6),
+                    ("pm", ctypes.c_size_t), ("jm", ctypes.c_size_t),
+                    ("ppm", ctypes.c_size_t), ("pjm", ctypes.c_size_t)]
+
+    k = ctypes.WinDLL("kernel32", use_last_error=True)
+    k.CreateJobObjectW.restype = w.HANDLE
+    k.GetCurrentProcess.restype = w.HANDLE
+    k.SetInformationJobObject.argtypes = [w.HANDLE, ctypes.c_int, ctypes.c_void_p, w.DWORD]
+    k.AssignProcessToJobObject.argtypes = [w.HANDLE, w.HANDLE]
+    job = k.CreateJobObjectW(None, None)
+    info = EXT()
+    info.basic.flags = 0x2000          # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+    k.SetInformationJobObject(job, 9, ctypes.byref(info), ctypes.sizeof(info))
+    k.AssignProcessToJobObject(job, k.GetCurrentProcess())   # дети наследуют job
+    return job
+
+
+try:
+    _job = kill_with_me()
+except Exception:
+    _job = None
 while True:
     LOG.parent.mkdir(exist_ok=True)
     if LOG.exists() and LOG.stat().st_size > 2_000_000:

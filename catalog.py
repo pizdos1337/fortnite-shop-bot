@@ -91,9 +91,20 @@ async def load_catalog(force=False) -> list:
     return cat
 
 
+SHOP_FILE = DATA / "shop.json"
+
+
 async def load_shop() -> dict:
     async with aiohttp.ClientSession() as s:
-        return await _get(s, "/shop", {"language": "ru"})
+        shop = await _get(s, "/shop", {"language": "ru"})
+    DATA.mkdir(parents=True, exist_ok=True)
+    SHOP_FILE.write_text(json.dumps(shop, ensure_ascii=False), "utf-8")
+    return shop
+
+
+def cached_shop():
+    """Последний полученный магазин — если API лежит, бот всё равно стартует."""
+    return json.loads(SHOP_FILE.read_text("utf-8")) if SHOP_FILE.exists() else None
 
 
 def shop_prices(shop: dict) -> dict:

@@ -144,6 +144,12 @@ async def cmd_list(m: Message):
 async def cmd_shop(m: Message):
     if not allowed(m.from_user.id):
         return
+    if api_down:
+        await m.answer("⚠️ Сайт с данными о магазине (fortnite-api.com) сейчас недоступен. "
+                       "Проверяю каждые 10 минут — как заработает, пришлю совпадения сам."
+                       + (f" Последние данные: {shop_date}." if shop_date else ""))
+        if not prices:
+            return
     hits = [w for w in user(m.chat.id)["wish"] if w in prices]
     if not hits:
         await m.answer(f"Сегодня ({shop_date}) ничего из твоего списка в магазине нет. "
@@ -259,9 +265,27 @@ async def notify_all(bot: Bot):
         save_users()
 
 
+api_down = ""      # текст ошибки, пока fortnite-api.com недоступен
+
+
 async def refresh(force_catalog=False):
-    global shop_date, prices
-    shop = await C.load_shop()
+    """Никогда не бросает: если API недоступен, бот работает со старыми данными
+    и пробует снова при следующей проверке."""
+    global shop_date, prices, api_down
+    try:
+        if not cat:
+            set_catalog(await C.load_catalog())
+        shop = await C.load_shop()
+        if api_down:
+            logging.info("fortnite-api.com снова доступен")
+        api_down = ""
+    except Exception as e:
+        if not api_down:
+            logging.warning("fortnite-api.com недоступен: %s", e)
+        api_down = str(e)[:200]
+        if not shop_date and (old := C.cached_shop()):
+            shop_date, prices = old["date"][:10], C.shop_prices(old)
+        return
     new_date = shop["date"][:10]
     if new_date != shop_date:
         if shop_date:          # магазин сменился — заодно подтянуть новые предметы
@@ -269,7 +293,10 @@ async def refresh(force_catalog=False):
         shop_date, prices = new_date, C.shop_prices(shop)
         logging.info("магазин %s: %d предметов", shop_date, len(prices))
     if force_catalog:
-        set_catalog(await C.load_catalog(force=True))
+        try:
+            set_catalog(await C.load_catalog(force=True))
+        except Exception as e:
+            logging.warning("каталог не обновился: %s", e)
 
 
 async def watcher(bot: Bot):
@@ -285,7 +312,10 @@ async def watcher(bot: Bot):
 async def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
     load_users()
-    set_catalog(await C.load_catalog())
+    try:
+        set_catalog(await C.load_catalog())   # при сбое API берёт старый кэш
+    except Exception as e:
+        logging.warning("каталог недоступен, попробую позже: %s", e)
     logging.info("каталог: %d предметов", len(cat))
     await refresh()
     # если Telegram заблокирован: "proxy": "http://127.0.0.1:порт" или socks5:// (нужен aiohttp-socks)
